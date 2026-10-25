@@ -48,7 +48,8 @@ contacting Substack.
 ## Notes in, posts out
 
 - The title is the note's leading H1, or the file name without its `MM-DD-NN ` prefix
-  when the note doesn't start with one. An H2 straight after that H1 is the subtitle.
+  when the note doesn't start with one. An H2 that opens the body (right after the H1,
+  if there is one) is the subtitle.
   Both become plain text. Substack gets them as the draft's title and subtitle and
   leaves them out of the body; LinkedIn keeps them as the first lines of the text.
   Without an H1, the LinkedIn text starts with the title from the file name, unless

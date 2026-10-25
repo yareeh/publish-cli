@@ -117,11 +117,11 @@ func TestLoadUsesLeadingH1AsTitle(t *testing.T) {
 	}
 }
 
-func TestLoadH2AfterH1IsSubtitle(t *testing.T) {
+func TestLoadLeadingH2IsSubtitle(t *testing.T) {
 	root := writeVault(t, map[string]string{
 		"a.md": "# Title\n\n## The **ingress**\n\nBody\n\n## Later section\n",
 		"b.md": "# Title\n\nBody first\n\n## Section\n",
-		"c.md": "## Not after an H1\n\nBody\n",
+		"c.md": "## Ingress without an H1\n\nBody\n",
 	})
 	a, _ := Load(filepath.Join(root, "a.md"))
 	if a.Subtitle != "The ingress" || a.PostBody() != "Body\n\n## Later section\n" {
@@ -132,8 +132,8 @@ func TestLoadH2AfterH1IsSubtitle(t *testing.T) {
 		t.Errorf("b: Subtitle = %q, PostBody = %q", b.Subtitle, b.PostBody())
 	}
 	c, _ := Load(filepath.Join(root, "c.md"))
-	if c.Title != "c" || c.TitleFromH1 || c.Subtitle != "" || c.PostBody() != c.Body {
-		t.Errorf("c: Title = %q, Subtitle = %q", c.Title, c.Subtitle)
+	if c.Title != "c" || c.TitleFromH1 || c.Subtitle != "Ingress without an H1" || c.PostBody() != "Body\n" {
+		t.Errorf("c: Title = %q, Subtitle = %q, PostBody = %q", c.Title, c.Subtitle, c.PostBody())
 	}
 }
 

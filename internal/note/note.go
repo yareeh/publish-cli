@@ -19,13 +19,13 @@ type Note struct {
 	Title       string
 	Frontmatter string   // raw YAML between the --- fences, without them
 	TitleFromH1 bool     // Title is the body's leading H1, not the file name
-	Subtitle    string   // an H2 right after the leading H1, as plain text
+	Subtitle    string   // an H2 opening the body (after any H1), as plain text
 	Body        string   // CommonMark with Obsidian syntax resolved, headings included
 	Images      []string // absolute paths of embedded images, in order
 	postBody    string
 }
 
-// PostBody is the body without the leading H1 and its subtitle, for
+// PostBody is the body without the leading H1 and the subtitle, for
 // platforms that show the title and subtitle separately.
 func (n *Note) PostBody() string {
 	return n.postBody
@@ -67,12 +67,13 @@ func Load(path string) (*Note, error) {
 	}
 	n.postBody = n.Body
 	// A note that starts with its own H1 uses that as the title instead, and
-	// an H2 straight after it is the subtitle. Both are kept as plain text.
+	// an H2 that opens the body, after the H1 if there is one, is the
+	// subtitle. Both are kept as plain text.
 	if h1, rest, ok := leadingHeading(n.Body, "# "); ok {
 		n.Title, n.TitleFromH1, n.postBody = render.LinkedIn(h1), true, rest
-		if h2, rest, ok := leadingHeading(rest, "## "); ok {
-			n.Subtitle, n.postBody = render.LinkedIn(h2), rest
-		}
+	}
+	if h2, rest, ok := leadingHeading(n.postBody, "## "); ok {
+		n.Subtitle, n.postBody = render.LinkedIn(h2), rest
 	}
 	return n, nil
 }
