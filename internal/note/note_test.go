@@ -101,13 +101,39 @@ func TestLoadMissingImageFails(t *testing.T) {
 }
 
 func TestLoadUsesLeadingH1AsTitle(t *testing.T) {
-	root := writeVault(t, map[string]string{"10-01-01 File name.md": "# Real title\n\nBody\n"})
+	root := writeVault(t, map[string]string{"10-01-01 File name.md": "# _Real_ title\n\nBody\n"})
 	n, err := Load(filepath.Join(root, "10-01-01 File name.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n.Title != "Real title" || strings.Contains(n.Body, "# Real title") {
-		t.Errorf("Title = %q, Body = %q", n.Title, n.Body)
+	if n.Title != "Real title" || n.Subtitle != "" || !n.TitleFromH1 {
+		t.Errorf("Title = %q, Subtitle = %q", n.Title, n.Subtitle)
+	}
+	if !strings.HasPrefix(n.Body, "# _Real_ title") {
+		t.Errorf("Body should keep the H1: %q", n.Body)
+	}
+	if n.PostBody() != "Body\n" {
+		t.Errorf("PostBody = %q", n.PostBody())
+	}
+}
+
+func TestLoadH2AfterH1IsSubtitle(t *testing.T) {
+	root := writeVault(t, map[string]string{
+		"a.md": "# Title\n\n## The **ingress**\n\nBody\n\n## Later section\n",
+		"b.md": "# Title\n\nBody first\n\n## Section\n",
+		"c.md": "## Not after an H1\n\nBody\n",
+	})
+	a, _ := Load(filepath.Join(root, "a.md"))
+	if a.Subtitle != "The ingress" || a.PostBody() != "Body\n\n## Later section\n" {
+		t.Errorf("a: Subtitle = %q, PostBody = %q", a.Subtitle, a.PostBody())
+	}
+	b, _ := Load(filepath.Join(root, "b.md"))
+	if b.Subtitle != "" || b.PostBody() != "Body first\n\n## Section\n" {
+		t.Errorf("b: Subtitle = %q, PostBody = %q", b.Subtitle, b.PostBody())
+	}
+	c, _ := Load(filepath.Join(root, "c.md"))
+	if c.Title != "c" || c.TitleFromH1 || c.Subtitle != "" || c.PostBody() != c.Body {
+		t.Errorf("c: Title = %q, Subtitle = %q", c.Title, c.Subtitle)
 	}
 }
 
@@ -138,5 +164,13 @@ func TestSetField(t *testing.T) {
 	got, _ = os.ReadFile(p2)
 	if string(got) != "---\nk: v\n---\nBody\n" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestUntitled(t *testing.T) {
+	for title, want := range map[string]bool{"10-16-02": true, "Korkeat korot": false, "10-16-02 x": false} {
+		if got := (&Note{Title: title}).Untitled(); got != want {
+			t.Errorf("Untitled(%q) = %v", title, got)
+		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 
@@ -90,18 +91,25 @@ func doLinkedIn(args []string) error {
 		return err
 	}
 	text := render.LinkedIn(n.Body)
+	// Without an H1 the post opens with the title from the file name.
+	if !n.TitleFromH1 && !n.Untitled() {
+		text = n.Title + "\n\n" + text
+	}
 	if printOnly {
 		fmt.Println(text)
 		return nil
 	}
 
-	if err := copyToClipboard(text); err != nil {
+	if err := copyToClipboard(text, render.LinkedInHTML(text)); err != nil {
 		return err
 	}
 	count := len([]rune(text))
 	fmt.Printf("Copied %q to the clipboard (%d characters).\n", n.Title, count)
 	if count > render.LinkedInLimit {
 		fmt.Printf("Warning: LinkedIn posts are limited to %d characters.\n", render.LinkedInLimit)
+	}
+	if n, err = markPublished(n, "linkedin"); err != nil {
+		return err
 	}
 	for _, img := range n.Images {
 		fmt.Println("Attach image:", img)
@@ -111,7 +119,7 @@ func doLinkedIn(args []string) error {
 	}
 	if len(n.Images) > 0 {
 		// Show the image in Finder so it can be dragged into the composer.
-		_ = exec.Command("open", "-R", n.Images[0]).Run()
+		_ = exec.Command("/usr/bin/open", "-R", n.Images[0]).Run()
 	}
 	return openURL(linkedInComposer)
 }
@@ -193,11 +201,11 @@ func doSubstackDraft(args []string) error {
 	}
 
 	if dryRun {
-		doc, err := render.ProseMirror(n.Body, func(p string) (string, error) { return "file://" + p, nil })
+		doc, err := render.ProseMirror(n.PostBody(), func(p string) (string, error) { return "file://" + p, nil })
 		if err != nil {
 			return err
 		}
-		out, _ := json.MarshalIndent(map[string]any{"draft_title": n.Title, "draft_body": doc}, "", "  ")
+		out, _ := json.MarshalIndent(map[string]any{"draft_title": n.Title, "draft_subtitle": n.Subtitle, "draft_body": doc}, "", "  ")
 		fmt.Println(string(out))
 		return nil
 	}
@@ -212,20 +220,23 @@ func doSubstackDraft(args []string) error {
 	}
 	client := substack.New(sid, cfg.SubstackPublication)
 
-	doc, err := render.ProseMirror(n.Body, func(p string) (string, error) {
+	doc, err := render.ProseMirror(n.PostBody(), func(p string) (string, error) {
 		fmt.Println("Uploading", p)
 		return client.UploadImage(p)
 	})
 	if err != nil {
 		return err
 	}
-	draft := substack.Draft{Title: n.Title, Body: doc, UserID: cfg.SubstackUserID}
+	draft := substack.Draft{Title: n.Title, Subtitle: n.Subtitle, Body: doc, UserID: cfg.SubstackUserID}
 
 	if id, ok := existingDraft(n.Frontmatter, cfg.SubstackPublication); ok && !forceNew {
 		if err := client.UpdateDraft(id, draft); err != nil {
 			return fmt.Errorf("updating draft %d (use --new for a fresh one): %w", id, err)
 		}
 		fmt.Println("Updated draft:", client.DraftURL(id))
+		if _, err := markPublished(n, "substack"); err != nil {
+			return err
+		}
 		return maybeOpen(client.DraftURL(id), noOpen)
 	}
 
@@ -238,7 +249,24 @@ func doSubstackDraft(args []string) error {
 		fmt.Fprintln(os.Stderr, "Warning: could not record the draft in the note:", err)
 	}
 	fmt.Println("Created draft:", url)
+	if _, err := markPublished(n, "substack"); err != nil {
+		return err
+	}
 	return maybeOpen(url, noOpen)
+}
+
+// markPublished tags the note published/<platform>, which on its first
+// publication also renames it to today's date. It returns the reloaded note.
+func markPublished(n *note.Note, platform string) (*note.Note, error) {
+	newPath, err := note.MarkPublished(n.Path, platform, time.Now())
+	if err != nil {
+		return n, fmt.Errorf("tagging the note: %w", err)
+	}
+	if newPath != n.Path {
+		// The Obsidian plugin reads this line to open the renamed note.
+		fmt.Println("Renamed to:", newPath)
+	}
+	return note.Load(newPath)
 }
 
 var draftIDRe = regexp.MustCompile(`/publish/post/(\d+)`)
@@ -287,11 +315,21 @@ func readSecret(prompt string) (string, error) {
 	return line, nil
 }
 
-func copyToClipboard(s string) error {
-	cmd := exec.Command("pbcopy")
-	cmd.Stdin = strings.NewReader(s)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("copying to clipboard: %w", err)
+// clipboardScript puts both a plain-text and an HTML version on the pasteboard.
+// pbcopy can't do HTML, and without LANG (as when Obsidian runs us) it reads
+// its input as MacRoman and garbles non-ASCII text.
+const clipboardScript = `ObjC.import('AppKit');
+const env = $.NSProcessInfo.processInfo.environment;
+const pb = $.NSPasteboard.generalPasteboard;
+pb.clearContents;
+pb.setStringForType(env.objectForKey('PUBLISH_CLI_TEXT'), 'public.utf8-plain-text');
+pb.setStringForType(env.objectForKey('PUBLISH_CLI_HTML'), 'public.html');`
+
+func copyToClipboard(text, html string) error {
+	cmd := exec.Command("/usr/bin/osascript", "-l", "JavaScript", "-e", clipboardScript)
+	cmd.Env = append(os.Environ(), "PUBLISH_CLI_TEXT="+text, "PUBLISH_CLI_HTML="+html)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("copying to clipboard: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
@@ -304,7 +342,7 @@ func maybeOpen(url string, noOpen bool) error {
 }
 
 func openURL(url string) error {
-	return exec.Command("open", url).Run()
+	return exec.Command("/usr/bin/open", url).Run()
 }
 
 func hasFlag(args *[]string, flag string) bool {

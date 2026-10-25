@@ -60,6 +60,14 @@ func TestLinkedInDropsImagesAndRawLinks(t *testing.T) {
 	}
 }
 
+func TestLinkedInHTML(t *testing.T) {
+	got := LinkedInHTML("Tänään <b>\nrivi\n\nToinen & kolmas")
+	want := `<meta charset="utf-8"><p>Tänään &lt;b&gt;<br>rivi</p><p><br></p><p>Toinen &amp; kolmas</p>`
+	if got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+}
+
 func toJSON(t *testing.T, v any) string {
 	t.Helper()
 	b, err := json.Marshal(v)

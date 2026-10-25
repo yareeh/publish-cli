@@ -47,12 +47,27 @@ contacting Substack.
 
 ## Notes in, posts out
 
-- The title is the file name without its `MM-DD-NN ` prefix, or the note's leading H1.
+- The title is the note's leading H1, or the file name without its `MM-DD-NN ` prefix
+  when the note doesn't start with one. An H2 straight after that H1 is the subtitle.
+  Both become plain text. Substack gets them as the draft's title and subtitle and
+  leaves them out of the body; LinkedIn keeps them as the first lines of the text.
+  Without an H1, the LinkedIn text starts with the title from the file name, unless
+  the note is still named only `MM-DD-NN.md`.
 - Frontmatter, `%%comments%%` and `==highlight==` markers are removed.
 - `![[image.png]]` embeds are found next to the note or anywhere in the vault;
   other embeds are dropped.
 - `[[Note|alias]]` and `[[Note]]` become plain text.
 - Single line breaks inside a paragraph are kept for LinkedIn and become spaces on Substack.
+
+## Publication tags and renaming
+
+`linkedin` and `substack draft` add `published/linkedin` or `published/substack` to the
+note's frontmatter tags (`--print` and `--dry-run` don't). When that is the note's first
+`published/` tag, the note is renamed to today's date: `MM-DD-NN` with NN one higher
+than the highest ordinal already used today, in the current `YYYYQn` folder.
+Attachments with the same name move along, and `[[…]]` links to them anywhere in the
+vault are updated. A note already dated today, or one whose name doesn't start with a
+date, keeps its name. The new path is printed as `Renamed to: <path>`.
 
 ## Running it from Obsidian
 

@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/yuin/goldmark/ast"
@@ -23,6 +24,18 @@ func LinkedIn(markdown string) string {
 		}
 	}
 	return strings.Join(blocks, "\n\n")
+}
+
+// LinkedInHTML wraps LinkedIn text as HTML for pasting. Blank-line paragraph
+// breaks in plain text are lost when pasted into the composer, so each
+// paragraph becomes a <p> with an empty paragraph between them.
+func LinkedInHTML(text string) string {
+	var paras []string
+	for _, block := range strings.Split(text, "\n\n") {
+		lines := strings.Split(html.EscapeString(block), "\n")
+		paras = append(paras, "<p>"+strings.Join(lines, "<br>")+"</p>")
+	}
+	return `<meta charset="utf-8">` + strings.Join(paras, "<p><br></p>")
 }
 
 func liBlock(n ast.Node, src []byte, indent string) string {

@@ -10,15 +10,33 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/yareeh/publish-cli/internal/render"
 )
 
 type Note struct {
 	Path        string
 	Title       string
 	Frontmatter string   // raw YAML between the --- fences, without them
-	Body        string   // CommonMark with Obsidian syntax resolved
+	TitleFromH1 bool     // Title is the body's leading H1, not the file name
+	Subtitle    string   // an H2 right after the leading H1, as plain text
+	Body        string   // CommonMark with Obsidian syntax resolved, headings included
 	Images      []string // absolute paths of embedded images, in order
+	postBody    string
 }
+
+// PostBody is the body without the leading H1 and its subtitle, for
+// platforms that show the title and subtitle separately.
+func (n *Note) PostBody() string {
+	return n.postBody
+}
+
+// Untitled is true for a note still named only "MM-DD-NN.md".
+func (n *Note) Untitled() bool {
+	return untitledRe.MatchString(n.Title)
+}
+
+var untitledRe = regexp.MustCompile(`^\d{2}-\d{2}-\d{2}$`)
 
 // Writing notes are named "MM-DD-NN Title.md"; the title is what follows the prefix.
 var datePrefix = regexp.MustCompile(`^\d{2}-\d{2}-\d{2} `)
@@ -47,9 +65,14 @@ func Load(path string) (*Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	// A note that starts with its own H1 uses that as the title instead.
-	if h1, rest, ok := leadingH1(n.Body); ok {
-		n.Title, n.Body = h1, rest
+	n.postBody = n.Body
+	// A note that starts with its own H1 uses that as the title instead, and
+	// an H2 straight after it is the subtitle. Both are kept as plain text.
+	if h1, rest, ok := leadingHeading(n.Body, "# "); ok {
+		n.Title, n.TitleFromH1, n.postBody = render.LinkedIn(h1), true, rest
+		if h2, rest, ok := leadingHeading(rest, "## "); ok {
+			n.Subtitle, n.postBody = render.LinkedIn(h2), rest
+		}
 	}
 	return n, nil
 }
@@ -88,13 +111,13 @@ func VaultRoot(path string) string {
 	}
 }
 
-func leadingH1(body string) (title, rest string, ok bool) {
+func leadingHeading(body, marker string) (heading, rest string, ok bool) {
 	trimmed := strings.TrimLeft(body, "\n")
 	line, after, _ := strings.Cut(trimmed, "\n")
-	if !strings.HasPrefix(line, "# ") {
+	if !strings.HasPrefix(line, marker) {
 		return "", body, false
 	}
-	return strings.TrimSpace(line[2:]), strings.TrimLeft(after, "\n"), true
+	return strings.TrimSpace(line[len(marker):]), strings.TrimLeft(after, "\n"), true
 }
 
 func resolve(body, noteDir, vault string) (string, []string, error) {
