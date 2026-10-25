@@ -23,6 +23,8 @@ brews:
     homepage: "https://github.com/yareeh/publish-cli"
     description: "Turn Obsidian Writing notes into LinkedIn posts and Substack drafts"
     license: "MIT"
+    # Until the HOMEBREW_TAP_TOKEN secret is set, release without updating the tap.
+    skip_upload: '{{ if eq .Env.HOMEBREW_TAP_TOKEN "" }}true{{ end }}'
 
 checksum:
   name_template: "checksums.txt"
