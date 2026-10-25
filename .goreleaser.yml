@@ -1,0 +1,35 @@
+version: 2
+
+builds:
+  - binary: publish-cli
+    env:
+      - CGO_ENABLED=0
+    # Uses pbcopy, open and the macOS keychain.
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+brews:
+  - repository:
+      owner: yareeh
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/yareeh/publish-cli"
+    description: "Turn Obsidian Writing notes into LinkedIn posts and Substack drafts"
+    license: "MIT"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
